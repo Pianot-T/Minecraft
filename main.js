@@ -3,6 +3,7 @@ let scene, camera, renderer;
 let player, cameraHolder;
 let isThirdPerson = false;
 let velocity = {x:0,y:0,z:0};
+let canJump = false;
 const gravity = 9.81;
 const speed = 5;
 const blockSize = 1;
@@ -12,7 +13,9 @@ const chunks = {};
 const blocks = {}; // map "x,y,z" -> mesh
 const keys = {};
 
-function key(e){keys[e.key.toLowerCase()] = e.type==='keydown';}
+function key(e){
+  keys[e.code] = e.type==='keydown';
+}
 
 function init(){
   scene = new THREE.Scene();
@@ -86,6 +89,7 @@ function createBlock(){
 function generateChunk(cx,cz){
   if(chunks[`${cx},${cz}`]) return; // already generated
   const group = new THREE.Group();
+  group.userData.blockKeys = [];
   for(let x=0;x<chunkSize;x++){
     for(let z=0;z<chunkSize;z++){
       const wx=cx*chunkSize+x;
@@ -93,10 +97,12 @@ function generateChunk(cx,cz){
       const n = noise.perlin2(wx/10,wz/10);
       const h = Math.floor(n*3)+1; // at least 1 block high
       for(let y=0;y<h;y++){
-        const block=createBlock();
-        block.position.set(wx*blockSize,y*blockSize,wz*blockSize);
+        const block = createBlock();
+        block.position.set(wx*blockSize, y*blockSize, wz*blockSize);
         group.add(block);
-        blocks[`${wx},${y},${wz}`]=block;
+        const key = `${wx},${y},${wz}`;
+        blocks[key] = block;
+        group.userData.blockKeys.push(key);
       }
     }
   }
@@ -104,12 +110,39 @@ function generateChunk(cx,cz){
   chunks[`${cx},${cz}`]=group;
 }
 
-function generateWorld(){
-  for(let cx=-renderDistance;cx<=renderDistance;cx++){
-    for(let cz=-renderDistance;cz<=renderDistance;cz++){
+function removeChunk(cx,cz){
+  const key = `${cx},${cz}`;
+  const group = chunks[key];
+  if(!group) return;
+  group.userData.blockKeys.forEach(k=>{
+    const b = blocks[k];
+    if(b){
+      scene.remove(b);
+      delete blocks[k];
+    }
+  });
+  scene.remove(group);
+  delete chunks[key];
+}
+
+function updateChunks(){
+  const pcx = Math.floor(player.position.x/(chunkSize*blockSize));
+  const pcz = Math.floor(player.position.z/(chunkSize*blockSize));
+  for(let cx=pcx-renderDistance; cx<=pcx+renderDistance; cx++){
+    for(let cz=pcz-renderDistance; cz<=pcz+renderDistance; cz++){
       generateChunk(cx,cz);
     }
   }
+  for(const key in chunks){
+    const [cx,cz] = key.split(',').map(Number);
+    if(Math.abs(cx-pcx)>renderDistance || Math.abs(cz-pcz)>renderDistance){
+      removeChunk(cx,cz);
+    }
+  }
+}
+
+function generateWorld(){
+  updateChunks();
   const light = new THREE.DirectionalLight(0xffffff,1);
   light.position.set(10,20,10);
   scene.add(light);
@@ -118,10 +151,11 @@ function generateWorld(){
 }
 
 function updatePlayer(dt){
-  if(keys['z']){velocity.x -= Math.sin(yaw)*speed*dt; velocity.z -= Math.cos(yaw)*speed*dt;}
-  if(keys['s']){velocity.x += Math.sin(yaw)*speed*dt; velocity.z += Math.cos(yaw)*speed*dt;}
-  if(keys['q']){velocity.x -= Math.cos(yaw)*speed*dt; velocity.z += Math.sin(yaw)*speed*dt;}
-  if(keys['d']){velocity.x += Math.cos(yaw)*speed*dt; velocity.z -= Math.sin(yaw)*speed*dt;}
+  if(keys['KeyZ']){velocity.x -= Math.sin(yaw)*speed*dt; velocity.z -= Math.cos(yaw)*speed*dt;}
+  if(keys['KeyS']){velocity.x += Math.sin(yaw)*speed*dt; velocity.z += Math.cos(yaw)*speed*dt;}
+  if(keys['KeyQ']){velocity.x -= Math.cos(yaw)*speed*dt; velocity.z += Math.sin(yaw)*speed*dt;}
+  if(keys['KeyD']){velocity.x += Math.cos(yaw)*speed*dt; velocity.z -= Math.sin(yaw)*speed*dt;}
+  if(keys['Space'] && canJump){velocity.y = 5; canJump=false;}
   velocity.y -= gravity*dt;
 
   // propose next position
@@ -158,12 +192,14 @@ function updatePlayer(dt){
 
   // if on ground stop vertical velocity
   if(player.position.y<0){player.position.y=0;velocity.y=0;}
+  canJump = velocity.y === 0;
 }
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = 0.016; // simplified fixed step
   updatePlayer(dt);
+  updateChunks();
   updateCamera();
   renderer.render(scene,camera);
 }
@@ -173,15 +209,20 @@ function toggleView(){
   updateCamera();
 }
 
-document.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='a')toggleView();});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')showMenu(true);});
+document.addEventListener('keydown',e=>{if(e.code==='KeyA')toggleView();});
+document.addEventListener('keydown',e=>{if(e.code==='Escape')showMenu(true);});
 
+document.getElementById('renderRange').addEventListener('input',e=>{
+  renderDistance = parseInt(e.target.value);
+  updateChunks();
+});
 document.getElementById('saveBtn').addEventListener('click',()=>{showMenu(false);});
 function showMenu(show){
   const menu=document.getElementById('menu');
   menu.classList.toggle('hidden',!show);
   if(show){
      document.exitPointerLock();
+     document.getElementById('renderRange').value = renderDistance;
   }else{
      renderer.domElement.requestPointerLock();
   }
