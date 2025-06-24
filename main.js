@@ -8,6 +8,7 @@ const speed = 5;
 const blockSize = 1;
 const chunkSize = 16;
 let renderDistance = 2;
+let onGround = false;
 const chunks = {};
 const blocks = {}; // map "x,y,z" -> mesh
 const keys = {};
@@ -36,6 +37,8 @@ function init(){
 
   noise.seed(Math.random());
   generateWorld();
+
+  document.getElementById('renderRange').value = renderDistance;
 
   document.addEventListener('keydown', key);
   document.addEventListener('keyup', key);
@@ -117,11 +120,33 @@ function generateWorld(){
   scene.add(amb);
 }
 
+function clearWorld(){
+  for(const key in chunks){
+    scene.remove(chunks[key]);
+    delete chunks[key];
+  }
+  for(const key in blocks){
+    delete blocks[key];
+  }
+}
+
+function updateChunks(){
+  const cx = Math.floor(player.position.x/(chunkSize*blockSize));
+  const cz = Math.floor(player.position.z/(chunkSize*blockSize));
+  for(let x=cx-renderDistance;x<=cx+renderDistance;x++){
+    for(let z=cz-renderDistance;z<=cz+renderDistance;z++){
+      generateChunk(x,z);
+    }
+  }
+}
+
 function updatePlayer(dt){
+  onGround=false;
   if(keys['z']){velocity.x -= Math.sin(yaw)*speed*dt; velocity.z -= Math.cos(yaw)*speed*dt;}
   if(keys['s']){velocity.x += Math.sin(yaw)*speed*dt; velocity.z += Math.cos(yaw)*speed*dt;}
   if(keys['q']){velocity.x -= Math.cos(yaw)*speed*dt; velocity.z += Math.sin(yaw)*speed*dt;}
   if(keys['d']){velocity.x += Math.cos(yaw)*speed*dt; velocity.z -= Math.sin(yaw)*speed*dt;}
+  if(keys[' '] && onGround){velocity.y = 5; onGround=false;}
   velocity.y -= gravity*dt;
 
   // propose next position
@@ -142,6 +167,7 @@ function updatePlayer(dt){
       if(player.position.y >= bb.max.y-0.01 && velocity.y<=0){
          next.y = bb.max.y;
          velocity.y=0;
+         onGround=true;
       }else if(player.position.y <= bb.min.y+1 && velocity.y>0){
          next.y = bb.min.y-2;
          velocity.y=0;
@@ -156,14 +182,15 @@ function updatePlayer(dt){
   player.position.copy(next);
   velocity.x*=0.9;velocity.z*=0.9; // damping
 
-  // if on ground stop vertical velocity
-  if(player.position.y<0){player.position.y=0;velocity.y=0;}
+  // if under ground level, clamp and mark grounded
+  if(player.position.y<0){player.position.y=0;velocity.y=0;onGround=true;}
 }
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = 0.016; // simplified fixed step
   updatePlayer(dt);
+  updateChunks();
   updateCamera();
   renderer.render(scene,camera);
 }
@@ -176,7 +203,13 @@ function toggleView(){
 document.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='a')toggleView();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')showMenu(true);});
 
-document.getElementById('saveBtn').addEventListener('click',()=>{showMenu(false);});
+document.getElementById('saveBtn').addEventListener('click',()=>{
+  renderDistance = parseInt(document.getElementById('renderRange').value);
+  clearWorld();
+  generateWorld();
+  updateChunks();
+  showMenu(false);
+});
 function showMenu(show){
   const menu=document.getElementById('menu');
   menu.classList.toggle('hidden',!show);
