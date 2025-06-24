@@ -9,6 +9,7 @@ This project provides a small 3D sandbox demo built with [Three.js](https://thre
 - Switch between first and third person using the `A` key.
 - Movement with `Z`, `Q`, `S`, `D` and jump with space.
 - Press `Escape` to open the menu where you can adjust render distance and resume with the **Sauvegarder** button.
+- Chunks are loaded and unloaded around the player based on the selected render distance.
 
 ## Running
 Open `index.html` in a modern web browser that supports WebGL. Click on the page to lock the pointer and start moving.
