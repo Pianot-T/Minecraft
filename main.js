@@ -3,6 +3,7 @@ let scene, camera, renderer;
 let player, cameraHolder;
 let isThirdPerson = false;
 let velocity = {x:0,y:0,z:0};
+let onGround = false;
 const gravity = 9.81;
 const speed = 5;
 const blockSize = 1;
@@ -94,9 +95,11 @@ function generateChunk(cx,cz){
       const h = Math.floor(n*3)+1; // at least 1 block high
       for(let y=0;y<h;y++){
         const block=createBlock();
+        const key=`${wx},${y},${wz}`;
         block.position.set(wx*blockSize,y*blockSize,wz*blockSize);
+        block.userData.key=key;
         group.add(block);
-        blocks[`${wx},${y},${wz}`]=block;
+        blocks[key]=block;
       }
     }
   }
@@ -104,17 +107,38 @@ function generateChunk(cx,cz){
   chunks[`${cx},${cz}`]=group;
 }
 
+function removeChunk(cx,cz){
+  const key=`${cx},${cz}`;
+  const group=chunks[key];
+  if(!group) return;
+  group.children.forEach(b=>{delete blocks[b.userData.key];});
+  scene.remove(group);
+  delete chunks[key];
+}
+
 function generateWorld(){
-  for(let cx=-renderDistance;cx<=renderDistance;cx++){
-    for(let cz=-renderDistance;cz<=renderDistance;cz++){
-      generateChunk(cx,cz);
-    }
-  }
+  updateChunks();
   const light = new THREE.DirectionalLight(0xffffff,1);
   light.position.set(10,20,10);
   scene.add(light);
   const amb = new THREE.AmbientLight(0xcccccc);
   scene.add(amb);
+}
+
+function updateChunks(){
+  const pcx=Math.floor(player.position.x/(blockSize*chunkSize));
+  const pcz=Math.floor(player.position.z/(blockSize*chunkSize));
+  for(let cx=pcx-renderDistance;cx<=pcx+renderDistance;cx++){
+    for(let cz=pcz-renderDistance;cz<=pcz+renderDistance;cz++){
+      generateChunk(cx,cz);
+    }
+  }
+  for(let key in chunks){
+    const [cx,cz]=key.split(',').map(Number);
+    if(Math.abs(cx-pcx)>renderDistance||Math.abs(cz-pcz)>renderDistance){
+      removeChunk(cx,cz);
+    }
+  }
 }
 
 function updatePlayer(dt){
@@ -123,6 +147,7 @@ function updatePlayer(dt){
   if(keys['q']){velocity.x -= Math.cos(yaw)*speed*dt; velocity.z += Math.sin(yaw)*speed*dt;}
   if(keys['d']){velocity.x += Math.cos(yaw)*speed*dt; velocity.z -= Math.sin(yaw)*speed*dt;}
   velocity.y -= gravity*dt;
+  onGround=false;
 
   // propose next position
   let next = player.position.clone();
@@ -142,6 +167,7 @@ function updatePlayer(dt){
       if(player.position.y >= bb.max.y-0.01 && velocity.y<=0){
          next.y = bb.max.y;
          velocity.y=0;
+         onGround=true;
       }else if(player.position.y <= bb.min.y+1 && velocity.y>0){
          next.y = bb.min.y-2;
          velocity.y=0;
@@ -157,13 +183,18 @@ function updatePlayer(dt){
   velocity.x*=0.9;velocity.z*=0.9; // damping
 
   // if on ground stop vertical velocity
-  if(player.position.y<0){player.position.y=0;velocity.y=0;}
+  if(player.position.y<0){player.position.y=0;velocity.y=0;onGround=true;}
+
+  if(keys[' '] && onGround){
+    velocity.y=5;
+  }
 }
 
 function animate(){
   requestAnimationFrame(animate);
   const dt = 0.016; // simplified fixed step
   updatePlayer(dt);
+  updateChunks();
   updateCamera();
   renderer.render(scene,camera);
 }
@@ -176,11 +207,16 @@ function toggleView(){
 document.addEventListener('keydown',e=>{if(e.key.toLowerCase()==='a')toggleView();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')showMenu(true);});
 
-document.getElementById('saveBtn').addEventListener('click',()=>{showMenu(false);});
+document.getElementById('saveBtn').addEventListener('click',()=>{
+  renderDistance=parseInt(document.getElementById('renderRange').value,10);
+  updateChunks();
+  showMenu(false);
+});
 function showMenu(show){
   const menu=document.getElementById('menu');
   menu.classList.toggle('hidden',!show);
   if(show){
+     document.getElementById('renderRange').value=renderDistance;
      document.exitPointerLock();
   }else{
      renderer.domElement.requestPointerLock();
