@@ -12,6 +12,8 @@ let renderDistance = 2;
 const chunks = {};
 const blocks = {}; // map "x,y,z" -> mesh
 const keys = {};
+let mobileMode=false;
+const joystick={active:false,x:0,y:0,id:null};
 
 function key(e){keys[e.key.toLowerCase()] = e.type==='keydown';}
 
@@ -45,6 +47,43 @@ function init(){
   });
   document.addEventListener('mousemove', onMouseMove);
   window.addEventListener('resize', onWindowResize);
+
+  const mobileToggle=document.getElementById('mobileToggle');
+  const jumpBtn=document.getElementById('jumpBtn');
+  const joystickEl=document.getElementById('joystick');
+  const stick=document.querySelector('#joystick .stick');
+
+  mobileToggle.addEventListener('click',()=>{
+    mobileMode=!mobileMode;
+    jumpBtn.classList.toggle('hidden',!mobileMode);
+    joystickEl.classList.toggle('hidden',!mobileMode);
+  });
+
+  jumpBtn.addEventListener('pointerdown',()=>{keys[' ']=true;});
+  jumpBtn.addEventListener('pointerup',()=>{keys[' ']=false;});
+  jumpBtn.addEventListener('pointercancel',()=>{keys[' ']=false;});
+
+  function updateJoy(e){
+    const rect=joystickEl.getBoundingClientRect();
+    const cx=rect.width/2,cy=rect.height/2;
+    const dx=e.clientX-rect.left-cx;
+    const dy=e.clientY-rect.top-cy;
+    const max=rect.width/2;
+    joystick.x=Math.max(-1,Math.min(1,dx/max));
+    joystick.y=Math.max(-1,Math.min(1,dy/max));
+    const len=Math.hypot(joystick.x,joystick.y);
+    if(len>1){joystick.x/=len;joystick.y/=len;}
+    stick.style.left=(joystick.x*max*0.5+cx-20)+"px";
+    stick.style.top=(joystick.y*max*0.5+cy-20)+"px";
+  }
+  function endJoy(){
+    joystick.active=false;joystick.x=0;joystick.y=0;
+    stick.style.left='30px';stick.style.top='30px';
+  }
+  joystickEl.addEventListener('pointerdown',e=>{joystick.active=true;joystick.id=e.pointerId;joystickEl.setPointerCapture(e.pointerId);updateJoy(e);});
+  joystickEl.addEventListener('pointermove',e=>{if(joystick.active&&e.pointerId===joystick.id)updateJoy(e);});
+  joystickEl.addEventListener('pointerup',e=>{if(e.pointerId===joystick.id){joystickEl.releasePointerCapture(e.pointerId);endJoy();}});
+  joystickEl.addEventListener('pointercancel',endJoy);
 }
 
 let yaw=0,pitch=0;
@@ -142,10 +181,14 @@ function updateChunks(){
 }
 
 function updatePlayer(dt){
-  if(keys['z']){velocity.x -= Math.sin(yaw)*speed*dt; velocity.z -= Math.cos(yaw)*speed*dt;}
-  if(keys['s']){velocity.x += Math.sin(yaw)*speed*dt; velocity.z += Math.cos(yaw)*speed*dt;}
-  if(keys['q']){velocity.x -= Math.cos(yaw)*speed*dt; velocity.z += Math.sin(yaw)*speed*dt;}
-  if(keys['d']){velocity.x += Math.cos(yaw)*speed*dt; velocity.z -= Math.sin(yaw)*speed*dt;}
+  let forward=0,right=0;
+  if(keys['z']) forward+=1;
+  if(keys['s']) forward-=1;
+  if(keys['d']) right+=1;
+  if(keys['q']) right-=1;
+  if(joystick.active){forward+=joystick.y;right+=joystick.x;}
+  velocity.x += (-Math.sin(yaw)*forward + Math.cos(yaw)*right)*speed*dt;
+  velocity.z += (-Math.cos(yaw)*forward - Math.sin(yaw)*right)*speed*dt;
   velocity.y -= gravity*dt;
   onGround=false;
 
@@ -215,6 +258,7 @@ document.getElementById('saveBtn').addEventListener('click',()=>{
 function showMenu(show){
   const menu=document.getElementById('menu');
   menu.classList.toggle('hidden',!show);
+  document.getElementById('crosshair').style.display=show?'none':'block';
   if(show){
      document.getElementById('renderRange').value=renderDistance;
      document.exitPointerLock();
