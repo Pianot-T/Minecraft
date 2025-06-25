@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini Minecraft</title>
+    <style>
+        body,html { margin:0; height:100%; overflow:hidden; }
+        #modeButton { position:absolute; top:10px; left:10px; z-index:10; }
+        #jumpButton { position:absolute; bottom:40px; left:10px; z-index:10; display:none; }
+        #joystickZone { position:absolute; bottom:10px; right:10px; width:100px; height:100px; display:none; z-index:10; }
+        canvas { display:block; }
+    </style>
+</head>
+<body>
+<button id="modeButton">Mode Android</button>
+<button id="jumpButton">Saut</button>
+<div id="joystickZone"></div>
+<script src="three.min.js"></script>
+<script src="joy.min.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
