@@ -1,3 +1,6 @@
+import * as THREE from './libs/three.module.js';
+import { PointerLockControls } from './libs/PointerLockControls.js';
+
 // basic THREE.js setup
 let scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB); // sky blue
@@ -8,7 +11,7 @@ let renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-let controls = new THREE.PointerLockControls(camera, document.body);
+let controls = new PointerLockControls(camera, document.body);
 
 // player data
 let player = {
